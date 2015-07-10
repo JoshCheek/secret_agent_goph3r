@@ -1,24 +1,43 @@
 require 'exfiltrate/gopher'
 
-RSpec.describe Exfiltrate::Gopher do
-  def connection
+# RSpec.describe Exfiltrate::Gopher do
+RSpec.describe 'abc' do
+  def gopher_for(conn)
+    Exfiltrate::Gopher.new(conn)
+  end
+  # /look
+  # /msg Gopher1 hello
+  # /send Gopher2 GCHQ.ppt
+  # /list
+  class Exfiltrate::TestConnection
+    def emit_join(*names)
+      @users = names
+    end
+    #   --> | Gopher1 has joined #hello, waiting for teammates...
+    #   --> | Gopher2 has joined #hello, waiting for teammates...
+    #   --> | Gopher3 has joined #hello, waiting for teammates...
+    #  * -- | Everyone has arrived, mission starting...
+    #  * -- | Ask for /help to get familiar around here
+  end
+
+  def new_connection
     Exfiltrate::TestConnection.new
   end
 
   describe 'connecting' do
     it 'considers itself is the first gopher that it sees join' do
-      conn   = new_connection.emit_join(1, 2)
-      gopher = Gopher.connect conn
+      conn   = new_connection.emit_join('Gopher1', 'Gopher2')
+      gopher = Exfiltrate::Gopher.connect conn
       expect(gopher.name).to eq 'Gopher1'
 
-      conn   = new_connection.emit_join(2, 1)
-      gopher = Gopher.connect conn
+      conn   = new_connection.emit_join('Gopher2', 'Gopher1')
+      gopher = Exfiltrate::Gopher.connect conn
       expect(gopher.name).to eq 'Gopher2'
     end
 
     it 'lists out its files' do
       conn   = new_connection
-      gopher = Gopher.connect conn
+      gopher = Exfiltrate::Gopher.connect conn
       expect(conn.messages '/list').to eq [:list]
     end
   end
@@ -31,7 +50,7 @@ RSpec.describe Exfiltrate::Gopher do
   describe 'receiving info' do
     it 'tracks its bandwidth' do
       conn   = new_connection
-      gopher = Gopher.new conn
+      gopher = gopher_for conn
       expect(gopher.bandwidth).to eq nil
       conn.emit_bandwidth(123)
       expect(gopher.bandwidth).to eq 123
@@ -40,7 +59,7 @@ RSpec.describe Exfiltrate::Gopher do
 
     it 'tracks the files it sees, their size, and their value' do
       conn   = new_connection
-      gopher = Gopher.new conn
+      gopher = gopher_for conn
       expect(gopher.file_list).to eq []
 
       conn.emit_files [
@@ -58,17 +77,17 @@ RSpec.describe Exfiltrate::Gopher do
   end
 
   describe 'sending and receiving files' do
-    let :conn {
+    let :conn do
       new_connection
         .emit_bandwidth(1000)
         .emit_files([['file1', 11, 12], ['file2', 21, 22], ['file3', 31, 32]])
-    }
+    end
 
-    let(:gopher) { Gopher.new conn }
+    let(:gopher) { gopher_for conn }
 
     it 'removes a file from its index, after sending it' do
       gopher.send_file 'file2.doc', to: 'Gopher2'
-      expect(gopher.filenames).to eq ['file1', 'file3'],
+      expect(gopher.filenames).to eq ['file1', 'file3']
       expect(conn.messages).to eq [[:send, 'Gopher2', 'BoundlessInformant']]
     end
 
