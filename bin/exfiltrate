@@ -1,0 +1,19 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+require 'exfiltrate'
+require 'exfiltrate/tcp_server'
+
+
+url     = 'gophercon2015.coreos.com'
+port    = 4001
+channel = 'ijustcametosayhello'
+
+gophers = Array.new 3 do
+  server = Exfiltrate::TcpServer.connect url, port, channel
+  Exfiltrate::Gopher.new server
+end
+
+require "pry"
+binding.pry
+# Exfiltrate.call gophers
