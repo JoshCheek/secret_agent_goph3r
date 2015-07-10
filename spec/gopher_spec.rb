@@ -5,19 +5,58 @@ RSpec.describe 'abc' do
   def gopher_for(conn)
     Exfiltrate::Gopher.new(conn)
   end
-  # /look
-  # /msg Gopher1 hello
-  # /send Gopher2 GCHQ.ppt
-  # /list
+
   class Exfiltrate::TestConnection
-    def emit_join(*names)
-      @users = names
+    attr_accessor :users, :channel, :callback, :messages, :bandwidth, :to_send
+
+    def initialize
+      self.users    = %w[Gopher1 Gopher2 Gopher3 Glena]
+      self.channel  = 'test-channel'
+      self.messages = []
+      self.to_send  = []
+      self.callback = lambda { |*event| to_send << event }
     end
-    #   --> | Gopher1 has joined #hello, waiting for teammates...
-    #   --> | Gopher2 has joined #hello, waiting for teammates...
-    #   --> | Gopher3 has joined #hello, waiting for teammates...
-    #  * -- | Everyone has arrived, mission starting...
-    #  * -- | Ask for /help to get familiar around here
+
+    def list
+      messages << [:list]
+    end
+
+    def send_file(recipient, filename)
+      messages << [:send, recipient, filename]
+    end
+
+    def on_data(&callback)
+      self.callback = callback
+      users.each { |u| callback.call :join, u, channel }
+      callback.call :starting
+      to_send.each { |e| callback.call *e }
+      self
+    end
+
+    def emit_channel(channel)
+      self.channel = channel
+      self
+    end
+
+    def emit_join(*names)
+      self.users = names
+      self
+    end
+
+    def emit_bandwidth(bw)
+      callback.call :bandwidth, bw
+      self
+    end
+
+    def emit_files(files)
+      files.each { |file| callback.call :file, file }
+      self
+    end
+
+    def emit_receive_file(data)
+      callback.call :receive_file, 'file4', 41, 42
+      self
+    end
   end
 
   def new_connection
@@ -25,6 +64,16 @@ RSpec.describe 'abc' do
   end
 
   describe 'connecting' do
+    it 'considers itself is the first gopher that it sees join' do
+      conn   = new_connection.emit_channel("channel1")
+      gopher = Exfiltrate::Gopher.connect conn
+      expect(gopher.channel).to eq 'channel1'
+
+      conn   = new_connection.emit_channel("channel2")
+      gopher = Exfiltrate::Gopher.connect conn
+      expect(gopher.channel).to eq 'channel2'
+    end
+
     it 'considers itself is the first gopher that it sees join' do
       conn   = new_connection.emit_join('Gopher1', 'Gopher2')
       gopher = Exfiltrate::Gopher.connect conn
@@ -38,7 +87,7 @@ RSpec.describe 'abc' do
     it 'lists out its files' do
       conn   = new_connection
       gopher = Exfiltrate::Gopher.connect conn
-      expect(conn.messages '/list').to eq [:list]
+      expect(conn.messages).to include [:list]
     end
   end
 
@@ -51,7 +100,7 @@ RSpec.describe 'abc' do
     it 'tracks its bandwidth' do
       conn   = new_connection
       gopher = gopher_for conn
-      expect(gopher.bandwidth).to eq nil
+      expect(gopher.bandwidth).to eq -1
       conn.emit_bandwidth(123)
       expect(gopher.bandwidth).to eq 123
       expect(conn.messages).to be_empty
@@ -67,7 +116,7 @@ RSpec.describe 'abc' do
         ['BoundlessInformant.doc', 2695, 36],
       ]
 
-      expect(gopher.file_list).to [
+      expect(gopher.file_list).to eq [
         [              '641A.ppt', 3041, 66],
         ['BoundlessInformant.doc', 2695, 36],
       ]
@@ -86,15 +135,15 @@ RSpec.describe 'abc' do
     let(:gopher) { gopher_for conn }
 
     it 'removes a file from its index, after sending it' do
-      gopher.send_file 'file2.doc', to: 'Gopher2'
+      gopher.send_file 'file2', to: 'Gopher2'
       expect(gopher.filenames).to eq ['file1', 'file3']
-      expect(conn.messages).to eq [[:send, 'Gopher2', 'BoundlessInformant']]
+      expect(conn.messages).to eq [[:send, 'Gopher2', 'file2']]
     end
 
     it 'records no cost or score when sending files to other gophers' do
       expect(gopher.bandwidth).to eq 1000
       expect(gopher.score).to eq 0
-      gopher.send_file 'file2.doc', to: 'Gopher2'
+      gopher.send_file 'file2', to: 'Gopher2'
       expect(gopher.bandwidth).to eq 1000
       expect(gopher.score).to eq 0
     end
@@ -102,7 +151,7 @@ RSpec.describe 'abc' do
     it 'deducts the filesize as a bandwidth cost and adds the secrecy value ot its score, when sending files to Glenda' do
       expect(gopher.bandwidth).to eq 1000
       expect(gopher.score).to eq 0
-      gopher.send_file 'file2.doc', to: 'Glenda'
+      gopher.send_file 'file2', to: 'Glenda'
       expect(gopher.bandwidth).to eq 1000-21
       expect(gopher.score).to eq 22
     end
