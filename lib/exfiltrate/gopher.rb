@@ -1,8 +1,6 @@
+require 'exfiltrate'
+
 class Exfiltrate
-  # /look
-  # /msg Gopher1 hello
-  # /send Gopher2 GCHQ.ppt
-  # /list
   class Gopher
     def self.connect(server)
       new(server).tap(&:connect)
@@ -49,13 +47,16 @@ class Exfiltrate
         self.name    ||= args.first
         self.channel ||= args.last
       when :bandwidth
+        raise unless args.first.kind_of? Fixnum
         self.bandwidth = args.first
       when :receive_file
         self.file_list << args
-      when :starting
+      when :noop, :starting
         # noop
+      when :finished
+        server.close
       else
-        raise "Unconsumed event: #{[event_type, *args].inspect}"
+        raise UnhandledEvent, [event_type, *args].inspect
       end
     end
   end
