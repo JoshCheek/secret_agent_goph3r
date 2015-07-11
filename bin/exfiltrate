@@ -10,7 +10,8 @@ port    = 4001
 channel = 'ijustcametosayhello'
 
 gophers = Array.new 3 do
-  server = Exfiltrate::TcpServer.connect url, port, channel
+  socket = TCPSocket.new url, port
+  server = Exfiltrate::TcpServer.connect url, channel
   Exfiltrate::Gopher.new server
 end
 
