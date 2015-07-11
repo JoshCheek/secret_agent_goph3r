@@ -1,6 +1,10 @@
 Secret Agent Goph3r
 ===================
 
+Never finished this, but pushing it anyway since half a day's worth of thought/effort was put into it.
+
+-----
+
 The Gophercon is in town, they gave their attendees this challenge.
 
 ```
